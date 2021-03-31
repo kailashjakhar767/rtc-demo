@@ -8,7 +8,6 @@
     "@testing-library/jest-dom": "^5.11.9",
     "@testing-library/react": "^11.2.5",
     "@testing-library/user-event": "^12.8.3",
-    "agora-rtc-sdk": "^3.4.0",
     "agora-rtc-sdk-ng": "^4.3.0",
     "agora-rtm-sdk": "^1.4.2",
     "react": "^17.0.2",
@@ -20,8 +19,11 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d build"
   },
+  "homepage": "https://kailashjakhar767.github.io/rtc-demo/",
   "eslintConfig": {
     "extends": [
       "react-app",
@@ -43,5 +45,8 @@
   "main": "index.js",
   "author": "",
   "license": "ISC",
-  "description": ""
+  "description": "",
+  "devDependencies": {
+    "gh-pages": "^3.1.0"
+  }
 }

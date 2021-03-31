@@ -8,7 +8,6 @@ import VideocamOffIcon from '@material-ui/icons/VideocamOff';
 import MicIcon from '@material-ui/icons/Mic';
 import MicOffIcon from '@material-ui/icons/MicOff';
 import AgoraRTM from 'agora-rtm-sdk';
-import { indigo } from '@material-ui/core/colors';
 
 
 

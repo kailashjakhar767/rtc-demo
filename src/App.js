@@ -1,5 +1,5 @@
 import React from 'react';
-import AgoraRTC from 'agora-rtc-sdk';
+import AgoraRTC from 'agora-rtc-sdk-ng';
 import './App.css';
 import RemoteStream from './Components/RemoteStream';
 
@@ -10,25 +10,30 @@ import MicOffIcon from '@material-ui/icons/MicOff';
 
 
 
-class App extends React.Component {
+class App4 extends React.Component {
 
   constructor(props) {
     super(props);
     this.state = {
       localStreamInitiated: false,
       remoteStreams: {},
-      remoteStreamControls: {},
       localVideo: true,
       localAudio: true,
+      videoPublished: false,
+      audioPublished: false
     }
-    this.channel = "mychannel";
-    this.localStream = null;
-    this.RTCClient = null;
-    this.appId = "35b75337d2e044a7970dd15999dfaddb";
-    this.token = "00635b75337d2e044a7970dd15999dfaddbIADbdGxS/b9P6f9x9KsoEw+2gAsWMNtHGOctZzYICsuoi9+pr8cAAAAAEAC5X9YGpIRdYAEAAQCjhF1g";
+    this.channel = "demo_channel_name";
+    this.localVideoView = React.createRef();
 
+    this.videoTrack = null
+    this.audioTrack = null;
+
+    this.RTCClient = null;
+    this.appId = "b8f5d7b5efcc4ba8992ac09d46a591b1";
     this.rtm = {
-      params: {}
+      params: {
+
+      }
     }
   }
 
@@ -37,161 +42,221 @@ class App extends React.Component {
 
   componentDidMount() {
     this.initLocalStream();
+    this.onDeviceChange();
     this.initClient();
   }
 
-  initLocalStream = () => {
-    console.log("CALLEd")
-    this.localStream = AgoraRTC.createStream({
-      streamID: this.channel,
-      audio: this.state.localAudio,
-      video: this.state.localVideo,
-      screen: false
-    });
+  initLocalStream = async () => {
+    try {
+      [this.audioTrack, this.videoTrack] = await AgoraRTC.createMicrophoneAndCameraTracks();
 
-    // this.localStream.setVideoProfile("240p");
+      // this.videoTrack.setOptimizationMode("motion");
+      this.videoTrack.play(this.localVideoView.current);
+    } catch (error) {
+      alert("please check the permission for audio/camera")
+      console.log("Weeoe", error)
+    }
+  }
 
-    this.localStream.init(() => {
-      console.log("initiated")
-      this.setState({ localStreamInitiated: true })
-      this.localStream.play("localView")
+  onDeviceChange = () => {
+    AgoraRTC.onMicrophoneChanged = this.onMicrophoneChanged;
+    // AgoraRTC.onCameraChanged = this.onPlaybackDeviceChange;
+  }
+
+  onCameraChanged = (info) => {
+    console.log("camera changed!", info.state, info.device);
+  }
+
+  onPlaybackDeviceChange = async (info) => {
+    const { audioPublished, videoPublished } = this.state;
+    try {
+      if (info.device.kind === 'audioinput') {
+        let newAudioDevice = await AgoraRTC.createMicrophoneAudioTrack();
+        if (audioPublished) {
+          await this.unpublishTrack(this.audioTrack);
+        }
+
+        // console.log(info)
+      } else {
+
+      }
+
+    } catch (error) {
+
+    }
+  }
+
+
+  onMicrophoneChanged = async (info) => {
+    console.log("LLL  newdevice", info);
+    try {
+      AgoraRTC.getDevices()
+        .then(async devices => {
+          const audioDevices = devices.filter(function (device) {
+            return device.kind === "audioinput";
+          });
+          console.log(audioDevices);
+          if (audioDevices.length > 0) {
+            let newAudioDevice = await AgoraRTC.createMicrophoneAudioTrack(audioDevices[0].deviceId);
+            if (this.state.audioPublished) {
+              await this.RTCClient.unpublish(this.audioTrack);
+              if (this.state.localAudio) {
+                this.publishTrack(newAudioDevice);
+              } else {
+                this.setState({ audioPublished: false });
+              }
+            }
+            this.audioTrack = newAudioDevice;
+
+          }
+        })
+    } catch (error) {
+      console.log("Error on get device,", error);
+    }
+  }
+
+
+  publishTrack = (track) => {
+    this.RTCClient.publish(track).then(res => {
+      if (track.trackMediaType === 'audio') {
+        this.setState({ audioPublished: true })
+      } else if (track.trackMediaType === 'video') {
+        this.setState({ videoPublished: true })
+      }
+    }).catch(error => {
+      console.log("Failed to published track :" + track.trackMediaType, track.trackMediaType, error);
     })
   }
+
+  unpublishTrack = async (track) => {
+    this.RTCClient.unpublish(track).then(() => {
+      console.log("unpublishTrack =>> :track unpublished", track);
+    }).catch(error => {
+      console.log("unpublishTrack =>> : failed to unpublish track", error);
+    })
+  }
+
 
   initClient = () => {
     this.RTCClient = AgoraRTC.createClient({
-      mode: 'live',
+      mode: 'rtc',
       codec: 'vp8'
     })
-    this.RTCClient.init(this.appId, () => {
-      this.subscribeEvents();
-      console.log("Client initiated successfully");
-    })
-
+    this.subscribeEvents();
   }
 
   subscribeEvents = () => {
-    this.RTCClient.on('stream-added', this.onStreamAdded);
-    this.RTCClient.on('stream-subscribed', this.onStreamSubscribed);
-    this.RTCClient.on('stream-removed', this.onStreamRemoved);
-    this.RTCClient.on('peer-online', this.onPeerOnline);
-    this.RTCClient.on('peer-leave', this.onPeerLeave);
-    this.RTCClient.on('mute-video', this.onMuteVideo);
-    this.RTCClient.on('unmute-video', this.onUnMuteVideo);
+    this.RTCClient.on('user-published', this.userPublished);
+    this.RTCClient.on('user-unpublished', this.userUnPublished);
+    this.RTCClient.on('user-left', this.userLeft);
+    this.RTCClient.on('user-joined', this.userJoined);
   }
 
-  onMuteVideo = (event) => {
-    console.log("onMuteVideo =>>>", event);
-  }
-  onUnMuteVideo = (event) => {
-    console.log("onUnMuteVideo =>>>", event);
-  }
-
-  onStreamRemoved = (event) => {
-    console.log("onStreamRemoved =>>>", event)
-  }
-  onPeerOnline = (event) => {
-    console.log("onPeerOnline =>>>", event)
-  }
-  onPeerLeave = (event) => {
-    let me = this;
-    let stream = event.stream;
+  userLeft = (user, reason) => {
+    console.log("userLeft Reason", reason);
     let remoteStreams = { ...this.state.remoteStreams };
-    if (stream) {
-      let streamId = stream.getId();
-      stream.stop();
-      delete remoteStreams[streamId];
-      console.log(event.uid + " leaved from this channel");
+    delete remoteStreams[user.uid];
+    this.setState({ remoteStreams });
+  }
+
+  userJoined = (user) => {
+    let remoteStreams = { ...this.state.remoteStreams };
+    remoteStreams[user.uid] = {
+      uid: user.uid,
+      videoState: false,
+      audioState: false
+    };
+    this.setState({
+      remoteStreams
+    })
+  }
+
+  userPublished = async (user, mediaType) => {
+    console.log("LLLLL pub =>>>> ", mediaType);
+    await this.RTCClient.subscribe(user, mediaType);
+    await this.RTCClient.setRemoteVideoStreamType(user.uid, 0)
+    await this.RTCClient.setStreamFallbackOption(user.uid, 2)
+    let remoteStreams = { ...this.state.remoteStreams };
+    let uid = user.uid;
+    if (mediaType === "video") {
+      user.videoTrack.play(uid + "");
+      remoteStreams[uid].videoState = true;
     }
-    else {
-      delete remoteStreams[event.uid];
-      console.log("peerleave", remoteStreams)
+    else if (mediaType === "audio") {
+      user.audioTrack.play();
+      remoteStreams[uid].audioState = true;
     }
-    // if (Object.keys(remoteStreams).length === 0) {
-    //   remoteStreams = {}
-    // }
     this.setState({ remoteStreams });
 
   }
 
+  userUnPublished = async (user, mediaType) => {
+    console.log("LLLLL unpub =>>>> ", mediaType);
+    await this.RTCClient.unsubscribe(user, mediaType);
+    let uid = user.uid;
+    let remoteStreams = { ...this.state.remoteStreams };
+    if (remoteStreams[uid]) {
+      if (mediaType === "video") {
+        remoteStreams[uid].videoState = false;
+      }
+      else if (mediaType === "audio") {
+        remoteStreams[uid].audioState = false;
+      }
+      this.setState({ remoteStreams });
+    }
+  }
 
   joinChannel = () => {
-    if (this.RTCClient !== null && this.localStream !== null) {
-      this.RTCClient.join(this.token, this.channel, null, (uid) => {
-        console.log("channel join success", uid);
+    if (this.RTCClient !== null) {
+
+      this.RTCClient.join(this.appId, this.channel, null, null).then(uid => {
         this.rtm.params.uid = uid;
-        // if (uid !== "2560453") {
-        this.RTCClient.enableDualStream(function () {
-          console.log("Enable dual stream success!")
-        }, function (err) {
-          console.log(err)
+
+        this.RTCClient.enableDualStream().then(() => {
+          console.log("Enable Dual stream success!");
+        }).catch(err => {
+          console.log(err);
         })
 
-        if (uid === "2560453") {
-          this.RTCClient.setClientRole("host", () => {
-            console.log("Done");
-          })
+        if (this.state.localVideo) {
+          this.publishTrack(this.videoTrack);
         }
-        this.RTCClient.publish(this.localStream, (error) => {
-          console.log("failed to publish", error);
-        })
-        // }
-      }, () => {
-        console.log("channel join failed");
+        if (this.state.localAudio) {
+          this.publishTrack(this.audioTrack);
+        }
+      }).catch(error => {
+        console.log("failed to join channel ", error);
       })
     }
   }
 
+  toggleTrack = async (track) => {
 
-  onStreamAdded = (event) => {
-    console.log("onStreamAdded =>>>>", event)
-    let remoteStream = event.stream;
-    let id = remoteStream.getId();
-
-    this.RTCClient.setRemoteVideoStreamType(remoteStream, 1);
-    this.RTCClient.setStreamFallbackOption(remoteStream, 2)
-
-    if (id !== this.state.uid) {
-      this.RTCClient.subscribe(remoteStream, (error) => {
-        console.log("failed to subscribe", error);
-      })
-    }
-  }
-  onStreamSubscribed = (event) => {
-    console.log("onStreamSubscribed =>>>>", event)
-    let remoteStream = event.stream;
-    let id = remoteStream.getId();
-    // this.addView(id);
-    // remoteStream.play('remoteStream'.concat(id));
-    let remoteStreams = { ...this.state.remoteStreams };
-    let remoteStreamControls = { ...this.state.remoteStreamControls };
-    remoteStreams[id] = remoteStream;
-    remoteStreamControls[id] = {
-      audio: remoteStream.audio,
-      video: remoteStream.video,
-    }
-    this.setState({ remoteStreams, remoteStreamControls })
-    console.log("Done sub")
-  }
-
-
-  toggleTrack = (track) => {
     if (track === 'video') {
       if (this.state.localVideo) {
-        this.localStream.muteVideo();
+        await this.videoTrack.setEnabled(false);
       } else {
-        this.localStream.unmuteVideo();
+        await this.videoTrack.setEnabled(true);
+
+        if (!this.state.videoPublished) {
+          this.publishTrack(this.videoTrack);
+        }
       }
       this.setState({ localVideo: !this.state.localVideo })
 
     } else {
       if (this.state.localAudio) {
-        this.localStream.muteAudio();
+        await this.audioTrack.setEnabled(false);
       } else {
-        this.localStream.unmuteAudio();
+        await this.audioTrack.setEnabled(true);
+        if (!this.state.audioPublished) {
+          this.publishTrack(this.audioTrack);
+        }
+
       }
       this.setState({ localAudio: !this.state.localAudio });
     }
+
   }
 
 
@@ -206,22 +271,23 @@ class App extends React.Component {
 
   render() {
     const { remoteStreams, remoteStreamControls } = this.state;
+    console.log("remoteStreams=>>>", remoteStreams)
     return (
       <div className="App">
         <div className="localStreamContainer">
-          <div id="localView"></div>
+          <div id="localView" ref={this.localVideoView}></div>
           <div className="controls">
-            <div className="controlIcon" onClick={() => this.toggleTrack("video")}>{this.state.localVideo ? <VideocamIcon fontSize="large" /> : <VideocamOffIcon />}</div>
-            <div className="controlIcon" onClick={() => this.toggleTrack("audio")}>{this.state.localAudio ? <MicIcon fontSize="large" /> : <MicOffIcon />}</div>
+            <div className="controlIcon" onClick={() => this.toggleTrack("video")}>{this.state.localVideo ? <VideocamIcon fontSize="large" /> : <VideocamOffIcon fontSize="large" />}</div>
+            <div className="controlIcon" onClick={() => this.toggleTrack("audio")}>{this.state.localAudio ? <MicIcon fontSize="large" /> : <MicOffIcon fontSize="large" />}</div>
           </div>
-          {this.state.localStreamInitiated && <button className="join" onClick={this.joinChannel}>Join</button>}
+          <button className="join" onClick={this.joinChannel}>Join</button>
         </div>
         <div className="remoteStreamContainer">
-          {Object.keys(remoteStreams).map((item, index) => <RemoteStream onMute={this.muteVideoL} onUnmute={this.UnmuteVideoL} key={item} stream={remoteStreams[item]} id={item} controls={remoteStreamControls[item]} />)}
+          {Object.keys(remoteStreams).map((item, index) => <RemoteStream key={item} stream={remoteStreams[item]} id={item} />)}
         </div>
       </div>
     );
   }
 }
 
-export default App;
+export default App4;
