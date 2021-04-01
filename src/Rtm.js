@@ -65,7 +65,8 @@ class Rtm extends React.Component {
 
       },
       speakers: [],
-
+      audioDevice: true,
+      videoDevice: true
     }
 
 
@@ -245,13 +246,29 @@ class Rtm extends React.Component {
 
   initLocalStream = async () => {
     try {
+      const devices = await AgoraRTC.getDevices();
+      const audioDevices = devices.filter(function(device){
+          return device.kind === "audioinput";
+      });
+      const videoDevices = devices.filter(function(device){
+        return device.kind === "videoinput";
+      });
+      if(audioDevices.length === 0) {
+        this.setState({
+          audioDevice: false
+        });
+      } else if (videoDevices.length === 0) {
+        this.setState({
+          videoDevice: false
+        })
+      }
       // [this.audioTrack, this.videoTrack] = await AgoraRTC.createMicrophoneAndCameraTracks();
-      this.videoTrack = await AgoraRTC.createCameraVideoTrack({ encoderConfig: this.state.selectedProfile });
-      this.audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+      this.videoTrack = this.state.videoDevice && await AgoraRTC.createCameraVideoTrack({ encoderConfig: this.state.selectedProfile });
+      this.audioTrack = this.state.audioDevice && await AgoraRTC.createMicrophoneAudioTrack();
       // this.videoTrack.setOptimizationMode("motion");
-      this.videoTrack.play(this.localVideoView.current);
+      this.state.videoDevice && this.videoTrack.play(this.localVideoView.current);
     } catch (error) {
-      alert("please check the permission for audio/camera")
+      alert("please check the permission for audio and camera")
       console.log("Weeoe", error)
     }
   }
@@ -274,8 +291,11 @@ class Rtm extends React.Component {
           const audioDevices = devices.filter(function (device) {
             return device.kind === "audioinput";
           });
-          console.log(audioDevices);
+          console.log({audioDevices});
           if (audioDevices.length > 0) {
+            this.setState({
+              audioDevice: true
+            });
             let newAudioDevice = await AgoraRTC.createMicrophoneAudioTrack(audioDevices[0].deviceId);
             if (this.state.audioPublished) {
               await this.RTCClient.unpublish(this.audioTrack);
@@ -530,7 +550,7 @@ class Rtm extends React.Component {
   }
 
   render() {
-    const { remoteStreams, rtmLoggedIn, rtmChannelJoined, tuteControls, speakers } = this.state;
+    const { remoteStreams, rtmLoggedIn, rtmChannelJoined, tuteControls, speakers, audioDevice, videoDevice } = this.state;
     console.log("streams =>>", remoteStreams);
     console.log("Speaker =>>", speakers);
     return (
@@ -539,8 +559,8 @@ class Rtm extends React.Component {
           <input className="input" value={this.state.uid} onChange={(e) => this.setState({ uid: e.target.value })} placeholder="enter user name" />
           <div id="localView" ref={this.localVideoView}></div>
           <div className="controls">
-            <div className="controlIcon" onClick={() => this.toggleTrack("video")}>{this.state.localVideo ? <VideocamIcon fontSize="large" /> : <VideocamOffIcon fontSize="large" />}</div>
-            <div className="controlIcon" onClick={() => this.toggleTrack("audio")}>{this.state.localAudio ? <MicIcon fontSize="large" /> : <MicOffIcon fontSize="large" />}</div>
+            <div className="controlIcon" onClick={() => this.toggleTrack("video")}>{(this.state.localVideo && videoDevice )? <VideocamIcon fontSize="large" /> : <VideocamOffIcon fontSize="large" />}</div>
+            <div className="controlIcon" onClick={() => this.toggleTrack("audio")}>{(this.state.localAudio && audioDevice )? <MicIcon fontSize="large" /> : <MicOffIcon fontSize="large" />}</div>
           </div>
           {!rtmLoggedIn && <button className="join" onClick={this.loginToRTM}>Login RTM</button>}
           {/* {rtmLoggedIn && !rtmChannelJoined && <button className="join" onClick={this.joinSessionChannel}>Join Channel</button>} */}
@@ -551,6 +571,8 @@ class Rtm extends React.Component {
           {/* <button className="join" onClick={this.getChannelAttr}>Get channel attr</button> */}
         </div>
         <div className="rightContainer">
+        {!audioDevice && <span className="infoText">**Please attach Microphone to this device</span>}
+        {!videoDevice && <span className="infoText">**Please attach Camera to this device</span>}
           <div className="info">
             <div style={{ marginRight: "10px" }}>Count: {Object.keys(remoteStreams).length}</div>
             | Video profile

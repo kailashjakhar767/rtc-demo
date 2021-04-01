@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+  import React from 'react';
 import VideocamIcon from '@material-ui/icons/Videocam';
 import VideocamOffIcon from '@material-ui/icons/VideocamOff';
 import MicIcon from '@material-ui/icons/Mic';
