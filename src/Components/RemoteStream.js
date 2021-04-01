@@ -3,21 +3,26 @@ import VideocamIcon from '@material-ui/icons/Videocam';
 import VideocamOffIcon from '@material-ui/icons/VideocamOff';
 import MicIcon from '@material-ui/icons/Mic';
 import MicOffIcon from '@material-ui/icons/MicOff';
+import SpeakerIcon from '@material-ui/icons/Speaker';
 
 const RemoteStream = (props) => {
-  const { id, stream, onAVChange, isTute = false, tuteControls = {} } = props;
+  const { id, stream, onAVChange, isTute = false, speaking = false, tuteControls = {} } = props;
   const { audioState, videoState } = stream;
 
   return (
     <div className="remoteStreamItem">
-      <div className="remoteStream" id={id}></div>
-      <div className="controls">
-        <div className="controlIcon" >{videoState ? <VideocamIcon fontSize="small" /> : <VideocamOffIcon fontSize="small" />}</div>
-        <div className="controlIcon" >{audioState ? <MicIcon fontSize="small" /> : <MicOffIcon fontSize="small" />}</div>
+      <div className={speaking ? "remoteStream speaking" : "remoteStream"} id={id}>
+        {speaking && <div className="speakerIcon"><SpeakerIcon fontSize="small" /></div>}
+        <div className="rmtControls">
+          <div className="controlIcon" >{videoState ? <VideocamIcon fontSize="small" /> : <VideocamOffIcon fontSize="small" />}</div>
+          <div className="controlIcon">{id}</div>
+          <div className="controlIcon" >{audioState ? <MicIcon fontSize="small" /> : <MicOffIcon fontSize="small" />}</div>
+        </div>
       </div>
-      {isTute && <div className="controls">
-        <button className="controlIcon" onClick={() => onAVChange(id, 'video', tuteControls.video)} >{tuteControls.video ? "Video on" : "Video off"}</button>
-        <button className="controlIcon" onClick={() => onAVChange(id, 'audio', tuteControls.audio)}>{tuteControls.audio ? "Audio on" : "Audio off"}</button>
+
+      {isTute && <div className="tuteControls">
+        <button className="controlIcon" onClick={() => onAVChange(id, 'video', tuteControls.video)} >{tuteControls.video ? "Mute Video" : "Unmute Video"}</button>
+        <button className="controlIcon" onClick={() => onAVChange(id, 'audio', tuteControls.audio)}>{tuteControls.audio ? "Mute Audio" : "Unmute Audio"}</button>
       </div>}
     </div>
   );

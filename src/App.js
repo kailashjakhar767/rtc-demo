@@ -10,6 +10,42 @@ import MicOffIcon from '@material-ui/icons/MicOff';
 
 
 
+let sms = {
+  type: "chat/Studentcontrol/activity/raisehand/thumbup",
+  data: { //chat
+    uid: "user_id",
+    type: "text/emojis || sticker",
+    text: "text message",
+    stickerID: "sticker id",
+    state: "pending/approved",
+    timestamp: "message timestamp",
+  },
+  data: { //raiseHand
+    uid: "user_id",
+    timestamp: "message timestamp",
+  },
+  data: {// controls
+    uid: "user_id",//no user id if type is global,
+    type: "student/global",
+    audio: true,
+    video: true,
+    timestamp: "message timestamp",
+  }
+  ,
+  data: { // thumbup
+    uid: "user_id",//sent by user id
+    type: "hearth/thumbup.....",
+    timestamp: "message timestamp",
+  }
+
+}
+
+
+
+
+
+
+
 class App4 extends React.Component {
 
   constructor(props) {

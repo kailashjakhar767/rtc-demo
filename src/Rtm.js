@@ -10,13 +10,43 @@ import MicOffIcon from '@material-ui/icons/MicOff';
 import AgoraRTM from 'agora-rtm-sdk';
 
 
+var videoProfiles = [
+  { label: "120p_1", detail: "120p_1, 160×120, 15fps, 65Kbps", value: "120p_1" },
+  { label: "180p_1", detail: "180p_1, 320×180, 15fps, 140Kbps", value: "180p_1" },
+  { label: "240p_1", detail: "240p_1, 320×240, 15fps, 200Kbps", value: "240p_1" },
+  { label: "360p_1", detail: "360p_1, 640×360, 30fps, 400Kbps", value: "360p_1" },
+  { label: "480p_2", detail: "480p_2, 640×480, 30fps, 1000Kbps", value: "480p_2" },
+  { label: "720p_1", detail: "720p_1, 1280×720, 15fps, 1130Kbps", value: "720p_1" },
+  { label: "720p_2", detail: "720p_2, 1280×720, 30fps, 2000Kbps", value: "720p_2" },
+  { label: "1080p_1", detail: "1080p_1, 1920×1080, 15fps, 2080Kbps", value: "1080p_1" },
+  { label: "1080p_2", detail: "1080p_2, 1920×1080, 30fps, 3000Kbps", value: "1080p_2" },
+  // { label: "200×640", detail: "200×640, 30fps", value: { width: 200, height: 640, frameRate: 30 } } // custom video profile
+]
+
 
 class Rtm extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
       localStreamInitiated: false,
-      remoteStreams: {},
+      remoteStreams: {
+        // '12': {
+        //   audio: false,
+        //   video: false
+        // },
+        // '13': {
+        //   audio: false,
+        //   video: false
+        // },
+        // '14': {
+        //   audio: false,
+        //   video: false
+        // },
+        // '15': {
+        //   audio: false,
+        //   video: false
+        // }
+      },
       localVideo: true,
       localAudio: true,
       videoPublished: false,
@@ -28,11 +58,13 @@ class Rtm extends React.Component {
         audio: true,
         video: true
       },
-      isTute: false,
+      isTute: true,
+      selectedProfile: '240p_1',
 
       tuteControls: {
 
-      }
+      },
+      speakers: [],
 
     }
 
@@ -107,18 +139,19 @@ class Rtm extends React.Component {
       alert("please enter username");
       return;
     }
-    this.RTMClient.login({ uid: this.state.uid, token: null }).then((res) => {
+    await this.RTMClient.login({ uid: this.state.uid, token: null }).then((res) => {
       console.log(" =>> RTM Loggin successfull!");
       this.RTMChannel = this.RTMClient.createChannel(this.channel);
 
       this.setState({ rtmLoggedIn: true, isTute: this.state.uid === 'admin' });
       this.getAVStates();
+      this.joinSessionChannel();
     }).catch(error => {
       console.log(" =>> failed to login RTM", error)
     })
   }
 
-  getAVStates = () => {
+  getAVStates = async () => {
     this.RTMClient.getChannelAttributes(this.channel).then(attr => {
       console.log("=>> channel attrs", attr)
       let tuteControls = attr.av ? JSON.parse(attr.av.value) : {};
@@ -212,8 +245,9 @@ class Rtm extends React.Component {
 
   initLocalStream = async () => {
     try {
-      [this.audioTrack, this.videoTrack] = await AgoraRTC.createMicrophoneAndCameraTracks();
-
+      // [this.audioTrack, this.videoTrack] = await AgoraRTC.createMicrophoneAndCameraTracks();
+      this.videoTrack = await AgoraRTC.createCameraVideoTrack({ encoderConfig: this.state.selectedProfile });
+      this.audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
       // this.videoTrack.setOptimizationMode("motion");
       this.videoTrack.play(this.localVideoView.current);
     } catch (error) {
@@ -295,6 +329,36 @@ class Rtm extends React.Component {
     this.RTCClient.on('user-unpublished', this.userUnPublished);
     this.RTCClient.on('user-left', this.userLeft);
     this.RTCClient.on('user-joined', this.userJoined);
+    this.RTCClient.enableAudioVolumeIndicator();
+    this.RTCClient.on('volume-indicator', this.volumeIndicator)
+  }
+
+  volumeIndicator = (volumes) => {
+    volumes.forEach((volume, index) => {
+      console.log(` =>> ${index} UID ${volume.uid} Level ${volume.level}`);
+      if (volume.level >= 5) {
+        this.updateSpeaker(volume.uid);
+      }
+    });
+  }
+
+  updateSpeaker = (uid) => {
+    let suid = uid;
+    let speakers = [...this.state.speakers];
+    speakers.push(suid);
+    this.setState({ speakers }, () => this.removeSpeaker(suid));
+  }
+
+  removeSpeaker = (suid) => {
+    setTimeout(() => {
+      console.log("cleared speaker", suid)
+      let speakers = [...this.state.speakers];
+      const index = speakers.indexOf(suid);
+      if (index > -1) {
+        speakers.splice(index, 1);
+      }
+      this.setState({ speakers });
+    }, 2000);
   }
 
   userLeft = (user, reason) => {
@@ -306,13 +370,22 @@ class Rtm extends React.Component {
 
   userJoined = (user) => {
     let remoteStreams = { ...this.state.remoteStreams };
+    let tuteControls = { ...this.state.tuteControls };
     remoteStreams[user.uid] = {
       uid: user.uid,
       videoState: false,
       audioState: false
     };
+
+    if (!tuteControls[user.uid]) {
+      tuteControls[user.uid] = {
+        audio: true,
+        video: true
+      }
+    }
     this.setState({
-      remoteStreams
+      remoteStreams,
+      tuteControls
     })
   }
 
@@ -433,9 +506,33 @@ class Rtm extends React.Component {
     })
   }
 
+  leaveChannel = () => {
+    this.RTMChannel.leave().then(() => {
+      console.log("Logged out from channel");
+      this.RTMClient.logout().then(() => {
+        console.log("Logged out from Agora");
+        this.RTCClient.leave();
+        this.setState({ rtmChannelJoined: false, rtmLoggedIn: false })
+      }).catch(error => {
+        console.log("=>> Error on Logging out from channel", error);
+      })
+    }).catch(error => {
+      console.log("=>> Error on leaving channel ", error);
+    })
+  }
+
+  toggleProfile = async (event) => {
+    let value = event.target.value;
+    await this.videoTrack.setEncoderConfiguration(value).then(() => {
+      console.log(" =>> Video profile updated : ", value)
+      this.setState({ selectedProfile: value });
+    })
+  }
+
   render() {
-    const { remoteStreams, rtmLoggedIn, rtmChannelJoined, tuteControls } = this.state;
+    const { remoteStreams, rtmLoggedIn, rtmChannelJoined, tuteControls, speakers } = this.state;
     console.log("streams =>>", remoteStreams);
+    console.log("Speaker =>>", speakers);
     return (
       <div className="App">
         <div className="localStreamContainer">
@@ -446,14 +543,24 @@ class Rtm extends React.Component {
             <div className="controlIcon" onClick={() => this.toggleTrack("audio")}>{this.state.localAudio ? <MicIcon fontSize="large" /> : <MicOffIcon fontSize="large" />}</div>
           </div>
           {!rtmLoggedIn && <button className="join" onClick={this.loginToRTM}>Login RTM</button>}
-          {rtmLoggedIn && !rtmChannelJoined && <button className="join" onClick={this.joinSessionChannel}>Join Channel</button>}
-          <button className="join" onClick={this.getChannelCount}>Member count</button>
+          {/* {rtmLoggedIn && !rtmChannelJoined && <button className="join" onClick={this.joinSessionChannel}>Join Channel</button>} */}
+          {rtmChannelJoined && <button className="join" onClick={this.leaveChannel}>Leave Channel</button>}
+          {/* <button className="join" onClick={this.getChannelCount}>Member count</button> */}
           {/* <button className="join" onClick={this.getUserAttr}>Get user Attr</button> */}
           {/* <button className="join" onClick={this.disableMe}>mark me as disabled</button> */}
-          <button className="join" onClick={this.getChannelAttr}>Get channel attr</button>
+          {/* <button className="join" onClick={this.getChannelAttr}>Get channel attr</button> */}
         </div>
-        <div className="remoteStreamContainer">
-          {Object.keys(remoteStreams).map((item, index) => <RemoteStream key={item} isTute={this.state.isTute} onAVChange={this.onAVChange} tuteControls={tuteControls[item]} stream={remoteStreams[item]} id={item} />)}
+        <div className="rightContainer">
+          <div className="info">
+            <div style={{ marginRight: "10px" }}>Count: {Object.keys(remoteStreams).length}</div>
+            | Video profile
+            <select style={{ marginLeft: "10px" }} value={this.state.selectedProfile} onChange={this.toggleProfile}>
+              {videoProfiles.map(item => <option value={item.value} key={item.label}>{item.detail}</option>)}
+            </select>
+          </div>
+          <div className="remoteStreamContainer">
+            {Object.keys(remoteStreams).map((item, index) => <RemoteStream speaking={speakers.indexOf(item) > -1} key={item} isTute={this.state.isTute} onAVChange={this.onAVChange} tuteControls={tuteControls[item]} stream={remoteStreams[item]} id={item} />)}
+          </div>
         </div>
       </div>
     );
