@@ -109,6 +109,12 @@ display: flex;
   margin-bottom: 5px;
 }
 
+.sicon {
+  height: 30px;
+    width: 20px;
+    overflow: hidden;
+}
+
 @keyframes amin {
   0% {
     transform: scale(0.5);

@@ -4,6 +4,7 @@ import VideocamOffIcon from '@material-ui/icons/VideocamOff';
 import MicIcon from '@material-ui/icons/Mic';
 import MicOffIcon from '@material-ui/icons/MicOff';
 import SpeakerIcon from '@material-ui/icons/Speaker';
+import speakingIcon from './../images/sound.gif';
 
 const RemoteStream = (props) => {
   const { id, stream, onAVChange, isTute = false, speaking = false, tuteControls = {} } = props;
@@ -12,7 +13,7 @@ const RemoteStream = (props) => {
   return (
     <div className="remoteStreamItem">
       <div className={speaking ? "remoteStream speaking" : "remoteStream"} id={id}>
-        {speaking && <div className="speakerIcon"><SpeakerIcon fontSize="small" /></div>}
+        {speaking && <div className="speakerIcon"><img className="sicon" src={speakingIcon} alt="" /></div>}
         <div className="rmtControls">
           <div className="controlIcon" >{videoState ? <VideocamIcon fontSize="small" /> : <VideocamOffIcon fontSize="small" />}</div>
           <div className="controlIcon">{id}</div>

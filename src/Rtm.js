@@ -13,14 +13,7 @@ import AgoraRTM from 'agora-rtm-sdk';
 var videoProfiles = [
   { label: "120p_1", detail: "120p_1, 160×120, 15fps, 65Kbps", value: "120p_1" },
   { label: "180p_1", detail: "180p_1, 320×180, 15fps, 140Kbps", value: "180p_1" },
-  { label: "240p_1", detail: "240p_1, 320×240, 15fps, 200Kbps", value: "240p_1" },
-  { label: "360p_1", detail: "360p_1, 640×360, 30fps, 400Kbps", value: "360p_1" },
-  { label: "480p_2", detail: "480p_2, 640×480, 30fps, 1000Kbps", value: "480p_2" },
-  { label: "720p_1", detail: "720p_1, 1280×720, 15fps, 1130Kbps", value: "720p_1" },
-  { label: "720p_2", detail: "720p_2, 1280×720, 30fps, 2000Kbps", value: "720p_2" },
-  { label: "1080p_1", detail: "1080p_1, 1920×1080, 15fps, 2080Kbps", value: "1080p_1" },
-  { label: "1080p_2", detail: "1080p_2, 1920×1080, 30fps, 3000Kbps", value: "1080p_2" },
-  // { label: "200×640", detail: "200×640, 30fps", value: { width: 200, height: 640, frameRate: 30 } } // custom video profile
+  { label: "240p_1", detail: "240p_1, 320×240, 15fps, 200Kbps", value: "240p_1" }
 ]
 
 
@@ -30,22 +23,7 @@ class Rtm extends React.Component {
     this.state = {
       localStreamInitiated: false,
       remoteStreams: {
-        // '12': {
-        //   audio: false,
-        //   video: false
-        // },
-        // '13': {
-        //   audio: false,
-        //   video: false
-        // },
-        // '14': {
-        //   audio: false,
-        //   video: false
-        // },
-        // '15': {
-        //   audio: false,
-        //   video: false
-        // }
+
       },
       localVideo: true,
       localAudio: true,
@@ -60,6 +38,7 @@ class Rtm extends React.Component {
       },
       isTute: true,
       selectedProfile: '240p_1',
+      networkQuality: 2,
 
       tuteControls: {
 
@@ -132,6 +111,7 @@ class Rtm extends React.Component {
   //     console.log(" =>> failed to set user Attr", error)
   //   })
   // }
+
 
 
 
@@ -351,9 +331,37 @@ class Rtm extends React.Component {
     this.RTCClient.on('user-joined', this.userJoined);
     this.RTCClient.enableAudioVolumeIndicator();
     this.RTCClient.on('volume-indicator', this.volumeIndicator)
+    this.RTCClient.on('network-quality', this.networkQuality);
   }
 
-  volumeIndicator = (volumes) => {
+  networkQuality = (stats) => {
+    console.log("=>> downlinkNetworkQuality", stats.downlinkNetworkQuality);
+    console.log("=>> uplinkNetworkQuality", stats.uplinkNetworkQuality);
+    let networkQuality = this.state.networkQuality;
+    let newNetworkQuality = stats.uplinkNetworkQuality;
+    if (newNetworkQuality > 0 && networkQuality !== newNetworkQuality) {
+      if (newNetworkQuality === 1) {
+        this.setVideoProfile('240p_1');
+      } else if (newNetworkQuality === 2) {
+        this.setVideoProfile('180p_1');
+      } else if (newNetworkQuality === 3 || newNetworkQuality === 4 || newNetworkQuality === 5) {
+        this.setVideoProfile('120p_1');
+      }
+      this.setState({ networkQuality: newNetworkQuality })
+    }
+    let rcstats = this.RTCClient.getRTCStats();
+    console.log("=>> RC Stats", rcstats)
+  }
+
+
+  setVideoProfile = async (profile) => {
+    await this.videoTrack.setEncoderConfiguration(profile).then(() => {
+      console.log(" =>> Video profile updated : ", profile)
+      this.setState({ selectedProfile: profile });
+    })
+  }
+
+  volumeIndicator = async (volumes) => {
     volumes.forEach((volume, index) => {
       console.log(` =>> ${index} UID ${volume.uid} Level ${volume.level}`);
       if (volume.level >= 5) {
@@ -371,7 +379,7 @@ class Rtm extends React.Component {
 
   removeSpeaker = (suid) => {
     setTimeout(() => {
-      console.log("cleared speaker", suid)
+      console.log("=>> cleared speaker", suid)
       let speakers = [...this.state.speakers];
       const index = speakers.indexOf(suid);
       if (index > -1) {
@@ -382,7 +390,7 @@ class Rtm extends React.Component {
   }
 
   userLeft = (user, reason) => {
-    console.log("userLeft Reason", reason);
+    console.log(" =>> userLeft Reason", reason);
     let remoteStreams = { ...this.state.remoteStreams };
     delete remoteStreams[user.uid];
     this.setState({ remoteStreams });
@@ -410,7 +418,7 @@ class Rtm extends React.Component {
   }
 
   userPublished = async (user, mediaType) => {
-    console.log("LLLLL pub =>>>> ", mediaType);
+    console.log("userPublished =>>>> ", mediaType, user.uid);
     await this.RTCClient.subscribe(user, mediaType);
     await this.RTCClient.setRemoteVideoStreamType(user.uid, 0)
     await this.RTCClient.setStreamFallbackOption(user.uid, 2)
@@ -429,7 +437,7 @@ class Rtm extends React.Component {
   }
 
   userUnPublished = async (user, mediaType) => {
-    console.log("LLLLL unpub =>>>> ", mediaType);
+    console.log("userUnPublished =>>>> ", mediaType, user.uid);
     await this.RTCClient.unsubscribe(user, mediaType);
     let uid = user.uid;
     let remoteStreams = { ...this.state.remoteStreams };
@@ -503,7 +511,7 @@ class Rtm extends React.Component {
     tuteControls[id] = ctrl;
 
     this.RTMClient.addOrUpdateChannelAttributes(this.channel, { 'av': JSON.stringify(tuteControls) }).then(res => {
-      console.log("AV updated successfully!");
+      console.log(" =>> AV updated successfully!");
       let text = JSON.stringify({ type, value: !value });
       this.RTMClient.sendMessageToPeer(
         { text }, id.toString())
@@ -541,12 +549,9 @@ class Rtm extends React.Component {
     })
   }
 
-  toggleProfile = async (event) => {
+  toggleProfile = (event) => {
     let value = event.target.value;
-    await this.videoTrack.setEncoderConfiguration(value).then(() => {
-      console.log(" =>> Video profile updated : ", value)
-      this.setState({ selectedProfile: value });
-    })
+    this.setVideoProfile(value);
   }
 
   render() {
